@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
-import { LogIn } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { LogIn, Mail } from 'lucide-react';
 
 export default function Login() {
   const signIn = useAuthStore(state => state.signIn);
+  const [mode, setMode] = useState<'signin' | 'forgot'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,6 +22,28 @@ export default function Login() {
       setSubmitting(false);
     }
     // on success, App redirects to /
+  };
+
+  const handleResetRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setNotice(null);
+    setSubmitting(true);
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + import.meta.env.BASE_URL,
+    });
+    setSubmitting(false);
+    if (resetError) {
+      setError(resetError.message);
+    } else {
+      setNotice('Check your email for a password reset link.');
+    }
+  };
+
+  const switchMode = (next: 'signin' | 'forgot') => {
+    setMode(next);
+    setError(null);
+    setNotice(null);
   };
 
   return (
@@ -37,10 +62,64 @@ export default function Login() {
             Horserace Catalog
           </h1>
           <p className="mt-2" style={{ fontSize: 'var(--text-small)', color: 'var(--text-muted)' }}>
-            Sign in to browse the product catalog
+            {mode === 'signin'
+              ? 'Sign in to browse the product catalog'
+              : 'Enter your email to receive a reset link'}
           </p>
         </div>
 
+        {mode === 'forgot' ? (
+          <form onSubmit={handleResetRequest} className="space-y-4">
+            <div>
+              <label
+                htmlFor="reset-email"
+                className="block mb-1 text-xs font-medium"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Email
+              </label>
+              <input
+                id="reset-email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input-field"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" style={{ fontSize: 'var(--text-small)', color: 'var(--danger)' }}>
+                {error}
+              </p>
+            )}
+            {notice && (
+              <p role="status" style={{ fontSize: 'var(--text-small)', color: 'var(--success)' }}>
+                {notice}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary w-full justify-center"
+              style={submitting ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+            >
+              <Mail size={18} />
+              {submitting ? 'Sending...' : 'Send Reset Link'}
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('signin')}
+              className="w-full text-center font-medium hover:underline"
+              style={{ fontSize: 'var(--text-small)', color: 'var(--accent)' }}
+            >
+              Back to sign in
+            </button>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
@@ -87,16 +166,26 @@ export default function Login() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="btn-primary w-full justify-center"
-            style={submitting ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
-          >
-            <LogIn size={18} />
-            {submitting ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={() => switchMode('forgot')}
+              className="w-full text-right font-medium hover:underline"
+              style={{ fontSize: 'var(--text-small)', color: 'var(--accent)' }}
+            >
+              Forgot password?
+            </button>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary w-full justify-center"
+              style={submitting ? { opacity: 0.6, cursor: 'not-allowed' } : undefined}
+            >
+              <LogIn size={18} />
+              {submitting ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

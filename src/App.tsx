@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
+import ResetPassword from "@/pages/ResetPassword";
 import { ToastContainer } from "@/components/Toast";
 import { useSettingsStore } from './store/useSettingsStore';
 import { useAuthStore } from './store/useAuthStore';
@@ -37,6 +38,8 @@ function LoginRoute() {
 export default function App() {
   const theme = useSettingsStore(state => state.theme);
   const initAuth = useAuthStore(state => state.init);
+  const isPasswordRecovery = useAuthStore(state => state.isPasswordRecovery);
+  const authLoading = useAuthStore(state => state.loading);
 
   useEffect(() => {
     void initAuth();
@@ -50,6 +53,9 @@ export default function App() {
   return (
     <HashRouter>
       <ToastContainer />
+      {isPasswordRecovery && !authLoading ? (
+        <ResetPassword />
+      ) : (
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route
@@ -61,6 +67,7 @@ export default function App() {
           }
         />
       </Routes>
+      )}
     </HashRouter>
   );
 }

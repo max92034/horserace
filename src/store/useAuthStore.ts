@@ -12,9 +12,11 @@ interface AuthState {
   profile: Profile | null;
   isAdmin: boolean;
   loading: boolean;
+  isPasswordRecovery: boolean;
   init: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  clearPasswordRecovery: () => void;
 }
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -34,17 +36,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   profile: null,
   isAdmin: false,
   loading: true,
+  isPasswordRecovery: false,
 
   init: async () => {
     if (initialized) return;
     initialized = true;
 
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
-    const profile = session ? await fetchProfile(session.user.id) : null;
-    set({ session, profile, isAdmin: profile?.is_admin ?? false, loading: false });
-
-    supabase.auth.onAuthStateChange((_event, nextSession) => {
+    // Subscribe before getSession so the PASSWORD_RECOVERY event fired while
+    // processing a recovery URL is not missed.
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        set({ isPasswordRecovery: true });
+      }
       set({ session: nextSession });
       if (nextSession) {
         // defer to avoid deadlocking the auth client callback
@@ -56,6 +59,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         set({ profile: null, isAdmin: false });
       }
     });
+
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    const profile = session ? await fetchProfile(session.user.id) : null;
+    set({ session, profile, isAdmin: profile?.is_admin ?? false, loading: false });
   },
 
   signIn: async (email, password) => {
@@ -65,6 +73,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ session: null, profile: null, isAdmin: false });
+    set({ session: null, profile: null, isAdmin: false, isPasswordRecovery: false });
+  },
+
+  clearPasswordRecovery: () => {
+    set({ isPasswordRecovery: false });
   },
 }));

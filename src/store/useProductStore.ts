@@ -12,7 +12,7 @@ interface ProductState {
   uploadProgress: string | null;
   fetchProducts: () => Promise<void>;
   loadProducts: (products: Product[]) => Promise<void>;
-  clearProducts: () => void;
+  clearProducts: () => Promise<void>;
 }
 
 interface ProductRow {
@@ -162,7 +162,10 @@ export const useProductStore = create<ProductState>()((set, get) => ({
     }
   },
 
-  clearProducts: () => {
+  // Deletes every row server-side; RLS rejects this for non-admins.
+  clearProducts: async () => {
+    const { error } = await supabase.from('products').delete().neq('sku', '');
+    if (error) throw error;
     set({ products: [], isLoaded: false, version: get().version + 1, lastUpdated: null });
   },
 }));

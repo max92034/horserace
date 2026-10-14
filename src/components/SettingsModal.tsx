@@ -6,6 +6,8 @@ import { useProductStore } from '../store/useProductStore';
 import { useSearchStore } from '../store/useSearchStore';
 import { downloadBlankTemplate } from '../utils/excelParser';
 import { useModalA11y } from '../hooks/useModalA11y';
+import { useAuthStore } from '../store/useAuthStore';
+import { useToastStore } from '../store/useToastStore';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -29,12 +31,19 @@ export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose
   const lastUpdated = useProductStore(state => state.lastUpdated);
   const clearProducts = useProductStore(state => state.clearProducts);
   const performSearch = useSearchStore(state => state.performSearch);
+  const isAdmin = useAuthStore(state => state.isAdmin);
+  const addToast = useToastStore(state => state.addToast);
   const modalRef = useModalA11y(isOpen, onClose);
 
-  const handlePurge = () => {
-    if (window.confirm('Remove all loaded catalog data from this device? Saved orders are kept.')) {
-      clearProducts();
-      performSearch('');
+  const handlePurge = async () => {
+    if (window.confirm('Permanently delete ALL catalog data for every user? This cannot be undone. Saved orders are kept.')) {
+      try {
+        await clearProducts();
+        performSearch('');
+        addToast('Catalog data purged.', 'success');
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : 'Purge failed.', 'error');
+      }
     }
   };
 
@@ -191,6 +200,7 @@ export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose
                   <Download size={18} />
                   Download Blank Template
                 </button>
+                {isAdmin && (
                 <button
                   onClick={handlePurge}
                   disabled={productCount === 0}
@@ -208,6 +218,7 @@ export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose
                   <Trash2 size={18} />
                   Purge Catalog Data
                 </button>
+                )}
               </div>
             </div>
 

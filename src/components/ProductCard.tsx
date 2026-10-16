@@ -64,6 +64,7 @@ export const ProductCard = React.memo(function ProductCard({ product }: ProductC
   const hasWeight = product.weight > 0;
   const hasCartonQty = product.cartonQty > 0;
   const hasPrice = product.fobPrice > 0;
+  const hasLocation = product.location.trim() !== '';
 
   const dimsValue = hasDims
     ? `${product.length || 0}×${product.width || 0}×${product.height || 0} cm`
@@ -72,7 +73,7 @@ export const ProductCard = React.memo(function ProductCard({ product }: ProductC
   const imgSrc = productImageUrl(product.sku, product.imageUrl);
   const fallbackSrc = productImageFallbackUrl(product.sku, product.imageUrl);
 
-  const hasAnyInfo = hasDims || hasWeight || hasCartonQty;
+  const hasAnyInfo = hasDims || hasWeight || hasCartonQty || hasLocation;
 
   return (
     <div
@@ -183,6 +184,9 @@ export const ProductCard = React.memo(function ProductCard({ product }: ProductC
             )}
             {hasCartonQty && (
               <InfoCell label="Carton" value={`${product.cartonQty}/CTN`} />
+            )}
+            {hasLocation && (
+              <InfoCell label="Location" value={product.location} />
             )}
           </div>
         )}

@@ -45,6 +45,7 @@ const ListItem = React.memo(function ListItem({ product }: ListItemProps) {
   if (dims) inlineParts.push(dims);
   if (hasWeight) inlineParts.push(`${product.weight} kg`);
   if (hasCartonQty) inlineParts.push(`${product.cartonQty}/CTN`);
+  if (product.location.trim()) inlineParts.push(product.location);
 
   return (
     <div

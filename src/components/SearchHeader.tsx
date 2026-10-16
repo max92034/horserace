@@ -52,6 +52,46 @@ export const SearchHeader = React.memo(function SearchHeader({ onUploadClick, on
     inputRef.current?.focus();
   }, [setQuery, performSearch]);
 
+  const renderSearchField = (id: string) => (
+    <div className="relative flex items-center h-10">
+      <Search
+        className="absolute left-4 pointer-events-none"
+        size={18}
+        strokeWidth={1.5}
+        style={{ color: 'var(--text-muted)' }}
+        aria-hidden="true"
+      />
+      <label htmlFor={id} className="sr-only">
+        Search products
+      </label>
+      <input
+        id={id}
+        ref={id === 'search-input' ? inputRef : undefined}
+        type="text"
+        value={query}
+        onChange={handleChange}
+        placeholder="Search SKU, name, or keyword..."
+        className="w-full h-full pl-11 pr-12 rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 transition-all duration-200 text-sm sm:text-base"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          color: 'var(--text-primary)',
+        }}
+      />
+      <div className="absolute right-2 flex items-center gap-1">
+        {query && (
+          <button
+            onClick={handleClear}
+            className="p-2.5 rounded-full transition-colors"
+            style={{ color: 'var(--text-muted)' }}
+            aria-label="Clear search"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <header
       className="sticky top-0 z-30 border-b backdrop-blur-header"
@@ -69,44 +109,8 @@ export const SearchHeader = React.memo(function SearchHeader({ onUploadClick, on
               className="h-14 object-contain"
             />
           </a>
-          <div className="flex-1 relative">
-            <div className="relative flex items-center h-10">
-              <Search
-                className="absolute left-4 pointer-events-none"
-                size={18}
-                strokeWidth={1.5}
-                style={{ color: 'var(--text-muted)' }}
-                aria-hidden="true"
-              />
-              <label htmlFor="search-input" className="sr-only">
-                Search products
-              </label>
-              <input
-                id="search-input"
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={handleChange}
-                placeholder="Search SKU, name, or keyword..."
-                className="w-full h-full pl-11 pr-12 rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/30 transition-all duration-200 text-sm sm:text-base"
-                style={{
-                  backgroundColor: 'var(--bg-secondary)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-              <div className="absolute right-2 flex items-center gap-1">
-                {query && (
-                  <button
-                    onClick={handleClear}
-                    className="p-2.5 rounded-full transition-colors"
-                    style={{ color: 'var(--text-muted)' }}
-                    aria-label="Clear search"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-            </div>
+          <div className="flex-1 relative hidden sm:block">
+            {renderSearchField('search-input')}
           </div>
 
           <div className="flex items-center gap-2">
@@ -238,6 +242,9 @@ export const SearchHeader = React.memo(function SearchHeader({ onUploadClick, on
             </button>
           </div>
         </div>
+      </div>
+      <div className="sm:hidden px-4 pb-3">
+        {renderSearchField('search-input-mobile')}
       </div>
     </header>
   );

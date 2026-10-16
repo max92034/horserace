@@ -10,8 +10,11 @@ const COLUMN_MAP: Record<string, keyof Product> = {
 
   // Physical Specifications
   'length': 'length',
+  'l': 'length',
   'width': 'width',
+  'w': 'width',
   'height': 'height',
+  'h': 'height',
   'weight': 'weight',
 
   // Packaging
@@ -111,12 +114,18 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             keyword: '',
           };
 
+          let packedDims: number[] | null = null;
           for (let j = 0; j < headers.length; j++) {
             const header = headers[j];
             const mappedKey = COLUMN_MAP[header];
             if (!mappedKey) continue;
 
             const value = row[j];
+            // Some sheets pack dims into the L column as "5.5*4.5*11"
+            if (mappedKey === 'length' && typeof value === 'string' && value.includes('*')) {
+              const parts = value.split('*').map(p => sanitizeNumber(p));
+              if (parts.length >= 3) packedDims = parts;
+            }
             if (mappedKey === 'length' || mappedKey === 'width' || mappedKey === 'height' ||
                 mappedKey === 'weight' || mappedKey === 'fobPrice' || mappedKey === 'cartonQty' ||
                 mappedKey === 'innerQty' || mappedKey === 'cartonL' || mappedKey === 'cartonW' ||
@@ -125,6 +134,12 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
             } else {
               (product[mappedKey] as string) = sanitizeValue(value);
             }
+          }
+
+          if (packedDims && product.width === 0 && product.height === 0) {
+            product.length = packedDims[0];
+            product.width = packedDims[1];
+            product.height = packedDims[2];
           }
 
           product.imageUrl = normalizeImageUrl(product.imageUrl);

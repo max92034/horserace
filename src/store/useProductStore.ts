@@ -39,6 +39,8 @@ interface ProductRow {
   updated_at: string;
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 function rowToProduct(row: ProductRow): Product {
   return {
     sku: row.sku ?? '',
@@ -48,7 +50,7 @@ function rowToProduct(row: ProductRow): Product {
     length: Number(row.length) || 0,
     width: Number(row.width) || 0,
     height: Number(row.height) || 0,
-    weight: Number(row.weight) || 0,
+    weight: round2(Number(row.weight) || 0),
     unit: row.unit || 'PC',
     cartonQty: Number(row.carton_qty) || 0,
     innerQty: Number(row.inner_qty) || 0,
@@ -79,7 +81,7 @@ function productToRow(p: Product) {
     length: p.length || 0,
     width: p.width || 0,
     height: p.height || 0,
-    weight: p.weight || 0,
+    weight: round2(p.weight || 0),
     carton_qty: p.cartonQty || 0,
     inner_qty: p.innerQty || 0,
     carton_l: p.cartonL || 0,

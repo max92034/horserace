@@ -117,7 +117,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
           let packedDims: number[] | null = null;
           for (let j = 0; j < headers.length; j++) {
             const header = headers[j];
-            const mappedKey = COLUMN_MAP[header];
+            // strip unit suffixes like "Weight(箱)" or "Carton L(cm)"
+            const mappedKey = COLUMN_MAP[header] ?? COLUMN_MAP[header.replace(/[(（].*?[)）]/g, '').trim()];
             if (!mappedKey) continue;
 
             const value = row[j];

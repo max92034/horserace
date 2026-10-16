@@ -4,7 +4,7 @@ import { cn } from '../lib/utils';
 import { useSettingsStore, type ThemeMode } from '../store/useSettingsStore';
 import { useProductStore } from '../store/useProductStore';
 import { useSearchStore } from '../store/useSearchStore';
-import { downloadBlankTemplate } from '../utils/excelParser';
+import { downloadBlankTemplate, downloadCurrentDb } from '../utils/excelParser';
 import { useModalA11y } from '../hooks/useModalA11y';
 import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
@@ -27,7 +27,8 @@ const BUILD_DATE = '2025-07-04';
 export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const theme = useSettingsStore(state => state.theme);
   const setTheme = useSettingsStore(state => state.setTheme);
-  const productCount = useProductStore(state => state.products.length);
+  const products = useProductStore(state => state.products);
+  const productCount = products.length;
   const lastUpdated = useProductStore(state => state.lastUpdated);
   const clearProducts = useProductStore(state => state.clearProducts);
   const performSearch = useSearchStore(state => state.performSearch);
@@ -199,6 +200,23 @@ export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose
                 >
                   <Download size={18} />
                   Download Blank Template
+                </button>
+                <button
+                  onClick={() => { void downloadCurrentDb(products); }}
+                  disabled={productCount === 0}
+                  className={cn(
+                    "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors",
+                    productCount === 0 && "opacity-50 cursor-not-allowed"
+                  )}
+                  style={{
+                    fontSize: 'var(--text-body)',
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-soft)',
+                  }}
+                >
+                  <Download size={18} />
+                  Download Current DB
                 </button>
                 {isAdmin && (
                 <button

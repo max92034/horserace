@@ -196,3 +196,18 @@ export async function downloadBlankTemplate(): Promise<void> {
   XLSX.utils.book_append_sheet(workbook, sheet, 'Catalog');
   XLSX.writeFile(workbook, 'catalog-template.xlsx');
 }
+
+export async function downloadCurrentDb(products: Product[]): Promise<void> {
+  const XLSX = await import('xlsx');
+  const rows = products.map(p => [
+    p.sku, p.description, p.collection, p.location,
+    p.length || '', p.width || '', p.height || '', p.weight || '',
+    p.unit, p.cartonQty || '', p.innerQty || '',
+    p.cartonL || '', p.cartonW || '', p.cartonH || '',
+    p.category, p.subcategory, p.fobPrice || '', p.note, p.imageUrl, p.keyword,
+  ]);
+  const sheet = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Catalog');
+  XLSX.writeFile(workbook, 'catalog-current.xlsx');
+}

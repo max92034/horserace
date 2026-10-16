@@ -110,49 +110,15 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
     }
   }, [locDropdownOpen]);
 
-  if (!isOpen) return null;
-
-  const canStart = locationInput.trim().length > 0;
-
-  const handleStart = () => {
-    if (!canStart) return;
-    startSession(locationInput);
-    setLocationInput('');
-    setLocDropdownOpen(false);
-    setView('scan');
-  };
-
-  const processScan = (rawSku: string) => {
-    const sku = rawSku.trim();
-    if (!sku || !activeSession) return;
-    const result = addScan(sku);
-    if (result === 'duplicate') {
-      addToast(`${sku} already scanned`, 'warning');
-    } else {
-      const product = productBySku.get(sku.toLowerCase());
-      if (!product) {
-        setLastResult({ kind: 'unknown', sku });
-      } else if (normLoc(product.location) !== normLoc(activeSession.location)) {
-        setLastResult({ kind: 'misplaced', sku: product.sku, dbLocation: product.location });
-      } else {
-        setLastResult({ kind: 'matched', sku: product.sku });
-      }
-    }
-  };
-
-  const handleScanSubmit = () => {
-    processScan(scanInput);
-    setScanInput('');
-    scanInputRef.current?.focus();
-  };
-
   // Document-level scanner capture. A Bluetooth scanner is an HID keyboard:
   // on a phone, DOM focus is unreliable (iOS blocks programmatic focus, taps
   // elsewhere steal it), so as long as the scan view is open we collect
   // keystrokes globally. Keystrokes landing in our own field are left to the
   // field's own handler to avoid double-counting.
+  // NOTE: must stay above the `if (!isOpen) return null` early-return below —
+  // hooks after an early return change hook count between renders and crash React.
   useEffect(() => {
-    if (view !== 'scan') return;
+    if (!isOpen || view !== 'scan') return;
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target === scanInputRef.current) return;
@@ -190,7 +156,43 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
       scanBufferRef.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, activeSession, productBySku]);
+  }, [isOpen, view, activeSession, productBySku]);
+
+  if (!isOpen) return null;
+
+  const canStart = locationInput.trim().length > 0;
+
+  const handleStart = () => {
+    if (!canStart) return;
+    startSession(locationInput);
+    setLocationInput('');
+    setLocDropdownOpen(false);
+    setView('scan');
+  };
+
+  const processScan = (rawSku: string) => {
+    const sku = rawSku.trim();
+    if (!sku || !activeSession) return;
+    const result = addScan(sku);
+    if (result === 'duplicate') {
+      addToast(`${sku} already scanned`, 'warning');
+    } else {
+      const product = productBySku.get(sku.toLowerCase());
+      if (!product) {
+        setLastResult({ kind: 'unknown', sku });
+      } else if (normLoc(product.location) !== normLoc(activeSession.location)) {
+        setLastResult({ kind: 'misplaced', sku: product.sku, dbLocation: product.location });
+      } else {
+        setLastResult({ kind: 'matched', sku: product.sku });
+      }
+    }
+  };
+
+  const handleScanSubmit = () => {
+    processScan(scanInput);
+    setScanInput('');
+    scanInputRef.current?.focus();
+  };
 
   const handleComplete = () => {
     if (!activeSession) return;

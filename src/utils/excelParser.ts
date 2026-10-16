@@ -137,7 +137,8 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
                 mappedKey === 'weight' || mappedKey === 'fobPrice' || mappedKey === 'cartonQty' ||
                 mappedKey === 'innerQty' || mappedKey === 'cartonL' || mappedKey === 'cartonW' ||
                 mappedKey === 'cartonH') {
-              (product[mappedKey] as number) = sanitizeNumber(value);
+              const num = sanitizeNumber(value);
+              (product[mappedKey] as number) = Math.round(num * 100) / 100;
             } else {
               (product[mappedKey] as string) = sanitizeValue(value);
             }

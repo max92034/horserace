@@ -78,6 +78,13 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
           throw new Error('No valid product rows found — check that the first row contains headers like SKU, Description');
         }
 
+        const unknownHeaders = (jsonData[0] as string[])
+          .map(h => String(h || '').trim())
+          .filter(h => h !== '' && !COLUMN_MAP[h.toLowerCase()]);
+        if (unknownHeaders.length > 0) {
+          throw new Error(`Unrecognized column header(s): ${unknownHeaders.join(', ')}`);
+        }
+
         const products: Product[] = [];
         const duplicateSkus: string[] = [];
         const seenSkus = new Set<string>();
@@ -117,8 +124,7 @@ export async function parseExcelFile(file: File): Promise<ParseResult> {
           let packedDims: number[] | null = null;
           for (let j = 0; j < headers.length; j++) {
             const header = headers[j];
-            // strip unit suffixes like "Weight(箱)" or "Carton L(cm)"
-            const mappedKey = COLUMN_MAP[header] ?? COLUMN_MAP[header.replace(/[(（].*?[)）]/g, '').trim()];
+            const mappedKey = COLUMN_MAP[header];
             if (!mappedKey) continue;
 
             const value = row[j];

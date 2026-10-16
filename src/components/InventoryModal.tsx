@@ -8,7 +8,7 @@ import { useProductStore } from '../store/useProductStore';
 import { useInventoryStore } from '../store/useInventoryStore';
 import { useToast } from '../store/useToastStore';
 import { useModalA11y } from '../hooks/useModalA11y';
-import { analyzeSession, exportReportCsv, exportScansCsv } from '../utils/inventory';
+import { analyzeSession, exportReportCsv, exportScansCsv, locationMatches } from '../utils/inventory';
 import { cn } from '../lib/utils';
 
 interface InventoryModalProps {
@@ -20,9 +20,9 @@ type View = 'home' | 'scan' | 'report';
 
 const normLoc = (s: string) => s.trim().toLowerCase();
 
-// Locations that should never be inventory-check targets (e.g. CF/BL are
-// shipping-hold buckets, not physical shelf locations).
-const EXCLUDED_LOCATION_RE = /^(CF|BL)([-\s]|$)/i;
+// Compound DB locations like "CF/BL" mean one SKU lives on several shelves —
+// they are not valid scan targets, so they stay out of the picker.
+const isCompoundLocation = (loc: string) => loc.includes('/');
 // Extra selectable locations that may not exist in the catalog yet.
 const EXTRA_LOCATIONS = ['JH'];
 
@@ -76,7 +76,7 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
     for (const loc of EXTRA_LOCATIONS) seen.set(normLoc(loc), loc);
     for (const p of products) {
       const loc = p.location.trim();
-      if (!loc || EXCLUDED_LOCATION_RE.test(loc)) continue;
+      if (!loc || isCompoundLocation(loc)) continue;
       if (!seen.has(normLoc(loc))) seen.set(normLoc(loc), loc);
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b));
@@ -172,8 +172,8 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
 
   const handleStart = () => {
     if (!canStart) return;
-    if (EXCLUDED_LOCATION_RE.test(locationInput.trim())) {
-      addToast('CF/BL locations cannot be inventory-checked', 'warning');
+    if (isCompoundLocation(locationInput.trim())) {
+      addToast('Pick a single location, not a compound one (e.g. CF/BL)', 'warning');
       return;
     }
     startSession(locationInput);
@@ -192,7 +192,7 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
       const product = productBySku.get(sku.toLowerCase());
       if (!product) {
         setLastResult({ kind: 'unknown', sku });
-      } else if (normLoc(product.location) !== normLoc(activeSession.location)) {
+      } else if (!locationMatches(product.location, activeSession.location)) {
         setLastResult({ kind: 'misplaced', sku: product.sku, dbLocation: product.location });
       } else {
         setLastResult({ kind: 'matched', sku: product.sku });
@@ -215,7 +215,7 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
   const statusOf = (sku: string, session: InventorySession) => {
     const product = productBySku.get(sku.toLowerCase());
     if (!product) return 'unknown' as const;
-    if (normLoc(product.location) !== normLoc(session.location)) return 'misplaced' as const;
+    if (!locationMatches(product.location, session.location)) return 'misplaced' as const;
     return 'matched' as const;
   };
 

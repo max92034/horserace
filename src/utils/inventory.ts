@@ -18,6 +18,16 @@ export interface SessionAnalysis {
 
 const normLoc = (s: string) => s.trim().toLowerCase();
 
+/** A DB location can name several shelves ("CF/BL"); split into single parts. */
+export function locationParts(location: string): string[] {
+  return location.split('/').map(normLoc).filter(Boolean);
+}
+
+/** True if the DB location (possibly compound like "CF/BL") includes the target. */
+export function locationMatches(dbLocation: string, target: string): boolean {
+  return locationParts(dbLocation).includes(normLoc(target));
+}
+
 export function analyzeSession(session: InventorySession, products: Product[]): SessionAnalysis {
   const bySku = new Map<string, Product>();
   for (const p of products) bySku.set(p.sku.toLowerCase(), p);
@@ -26,7 +36,7 @@ export function analyzeSession(session: InventorySession, products: Product[]): 
   const misplaced: ScanMatch[] = [];
   const unknown: InventoryScan[] = [];
   const scannedKeys = new Set<string>();
-  const target = normLoc(session.location);
+  const target = session.location;
 
   for (const scan of session.scans) {
     const key = scan.sku.toLowerCase();
@@ -34,7 +44,7 @@ export function analyzeSession(session: InventorySession, products: Product[]): 
     const product = bySku.get(key);
     if (!product) {
       unknown.push(scan);
-    } else if (normLoc(product.location) === target) {
+    } else if (locationMatches(product.location, target)) {
       matched.push({ scan, product });
     } else {
       misplaced.push({ scan, product });
@@ -42,7 +52,7 @@ export function analyzeSession(session: InventorySession, products: Product[]): 
   }
 
   const missing = products.filter(
-    p => normLoc(p.location) === target && !scannedKeys.has(p.sku.toLowerCase())
+    p => locationMatches(p.location, target) && !scannedKeys.has(p.sku.toLowerCase())
   );
 
   return { matched, misplaced, unknown, missing };

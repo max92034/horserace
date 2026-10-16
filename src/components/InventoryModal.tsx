@@ -20,6 +20,12 @@ type View = 'home' | 'scan' | 'report';
 
 const normLoc = (s: string) => s.trim().toLowerCase();
 
+// Locations that should never be inventory-check targets (e.g. CF/BL are
+// shipping-hold buckets, not physical shelf locations).
+const EXCLUDED_LOCATION_RE = /^(CF|BL)([-\s]|$)/i;
+// Extra selectable locations that may not exist in the catalog yet.
+const EXTRA_LOCATIONS = ['JH'];
+
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
@@ -67,9 +73,11 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
 
   const distinctLocations = useMemo(() => {
     const seen = new Map<string, string>();
+    for (const loc of EXTRA_LOCATIONS) seen.set(normLoc(loc), loc);
     for (const p of products) {
       const loc = p.location.trim();
-      if (loc && !seen.has(normLoc(loc))) seen.set(normLoc(loc), loc);
+      if (!loc || EXCLUDED_LOCATION_RE.test(loc)) continue;
+      if (!seen.has(normLoc(loc))) seen.set(normLoc(loc), loc);
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b));
   }, [products]);
@@ -164,6 +172,10 @@ export function InventoryModal({ isOpen, onClose }: InventoryModalProps) {
 
   const handleStart = () => {
     if (!canStart) return;
+    if (EXCLUDED_LOCATION_RE.test(locationInput.trim())) {
+      addToast('CF/BL locations cannot be inventory-checked', 'warning');
+      return;
+    }
     startSession(locationInput);
     setLocationInput('');
     setLocDropdownOpen(false);

@@ -5,6 +5,7 @@ import { UploadModal } from '@/components/UploadModal';
 import { OrderDrawer } from '@/components/OrderDrawer';
 import { OrderHistoryModal } from '@/components/OrderHistoryModal';
 import { SettingsModal } from '@/components/SettingsModal';
+import { InventoryModal } from '@/components/InventoryModal';
 import { useSearchStore } from '@/store/useSearchStore';
 import { useProductStore } from '@/store/useProductStore';
 import { useOrderStore } from '@/store/useOrderStore';
@@ -15,6 +16,7 @@ export default function Home() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const results = useSearchStore(state => state.results);
   const isLoaded = useProductStore(state => state.isLoaded);
   const products = useProductStore(state => state.products);
@@ -88,7 +90,8 @@ export default function Home() {
       <UploadModal isOpen={uploadOpen} onClose={() => setUploadOpen(false)} />
       <OrderDrawer isOpen={isDrawerOpen} onClose={() => toggleDrawer(false)} />
       <OrderHistoryModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} onInventoryClick={() => setInventoryOpen(true)} />
+      <InventoryModal isOpen={inventoryOpen} onClose={() => setInventoryOpen(false)} />
     </div>
   );
 }

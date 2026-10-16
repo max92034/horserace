@@ -71,3 +71,18 @@ export interface Order {
   updatedAt: string;
   notes: string;
 }
+
+export interface InventoryScan {
+  sku: string;
+  scannedAt: string;
+}
+
+export interface InventorySession {
+  id: string;
+  location: string;
+  status: 'active' | 'completed';
+  scans: InventoryScan[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+}

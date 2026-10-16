@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings as SettingsIcon, Download, Trash2 } from 'lucide-react';
+import { X, Settings as SettingsIcon, Download, Trash2, ClipboardList } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSettingsStore, type ThemeMode } from '../store/useSettingsStore';
 import { useProductStore } from '../store/useProductStore';
@@ -12,6 +12,7 @@ import { useToastStore } from '../store/useToastStore';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onInventoryClick: () => void;
 }
 
 const themeOptions: { id: ThemeMode; name: string; description: string; swatch: string; accent?: string }[] = [
@@ -24,7 +25,7 @@ const themeOptions: { id: ThemeMode; name: string; description: string; swatch: 
 const APP_VERSION = '1.0.0';
 const BUILD_DATE = '2025-07-04';
 
-export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose, onInventoryClick }: SettingsModalProps) {
   const theme = useSettingsStore(state => state.theme);
   const setTheme = useSettingsStore(state => state.setTheme);
   const products = useProductStore(state => state.products);
@@ -217,6 +218,19 @@ export const SettingsModal = React.memo(function SettingsModal({ isOpen, onClose
                 >
                   <Download size={18} />
                   Download Current DB
+                </button>
+                <button
+                  onClick={() => { onClose(); onInventoryClick(); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors"
+                  style={{
+                    fontSize: 'var(--text-body)',
+                    background: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-soft)',
+                  }}
+                >
+                  <ClipboardList size={18} />
+                  Inventory Check
                 </button>
                 {isAdmin && (
                 <button

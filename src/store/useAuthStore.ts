@@ -67,8 +67,49 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.toLowerCase(), password });
-    return error ? error.message : null;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase(),
+        password,
+      });
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.warn('[auth] signInWithPassword returned error:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack?.substring(0, 200),
+        });
+        return error.message;
+      }
+      return null;
+    } catch (err: unknown) {
+      // Catch raw exceptions (network, CORS, storage, etc.) that Supabase-js
+      // didn't wrap into its normal error shape.
+      const e = err as Error;
+      // eslint-disable-next-line no-console
+      console.error('[auth] signIn threw:', {
+        name: e?.name ?? 'Unknown',
+        message: e?.message ?? String(err),
+        stack: e?.stack?.substring(0, 300),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+      });
+
+      // Human-friendly mapping for common iOS Safari failure modes
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+      const isIOS = /iphone|ipad|ipod/.test(ua) || /macintosh/.test(ua) && 'ontouchend' in document;
+      const msg = e?.message ?? '';
+
+      if (msg.includes('network') || msg.includes('fetch') || e?.name === 'TypeError') {
+        if (isIOS) {
+          return 'Unable to connect to the server. On iPhone, please check that you are not in Private Browsing mode, or try a different browser.';
+        }
+        return 'Network error. Please check your connection and try again.';
+      }
+      if (msg.includes('Storage') || msg.includes('QuotaExceeded')) {
+        return 'Unable to save your login session. Please disable Private Browsing or update your browser.';
+      }
+      return msg || 'Unknown error during sign-in.';
+    }
   },
 
   signOut: async () => {

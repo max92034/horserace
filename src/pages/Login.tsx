@@ -17,7 +17,7 @@ export default function Login() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const err = await signIn(email.trim(), password);
+    const err = await signIn(email.trim().toLowerCase(), password);
     if (err) {
       setError(err);
       setSubmitting(false);
@@ -30,7 +30,7 @@ export default function Login() {
     setError(null);
     setNotice(null);
     setSubmitting(true);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo: window.location.origin + import.meta.env.BASE_URL,
     });
     setSubmitting(false);
@@ -84,6 +84,9 @@ export default function Login() {
                 type="email"
                 required
                 autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field"
@@ -135,6 +138,9 @@ export default function Login() {
               type="email"
               required
               autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="input-field"

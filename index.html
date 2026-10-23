@@ -5,45 +5,68 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Horserace Catalog</title>
-    <!-- Global error catch-all that runs BEFORE the React bundle loads.
-         Writes to #__global_err__ so we catch parse errors, CORS failures,
-         and anything that crashes before main.tsx mounts. -->
+    <!-- On-screen error overlay for pre-React crashes. Disabled by default so
+         normal users never see it; enable with ?debug=1 on the URL.
+         Resource-load failures (404 images etc.) are ignored on purpose —
+         those are already handled by the per-image onError fallback. -->
     <script>
       (function () {
+        var enabled = /[?&]debug=1(&|$)/.test(location.search);
+        try {
+          if (localStorage.getItem('__diag_enabled__') === '1') enabled = true;
+        } catch (e) { /* storage blocked */ }
+        if (!enabled) return;
+
+        var count = 0;
+        var MAX = 8;
+
         function ensureBox() {
           var box = document.getElementById('__global_err__');
           if (!box) {
-            box = document.createElement('pre');
+            box = document.createElement('div');
             box.id = '__global_err__';
-            box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:50vh;overflow:auto;' +
+            box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:45vh;overflow:auto;' +
               'background:#fee2e2;color:#991b1b;font:10px/1.4 ui-monospace,Menlo,Consolas,monospace;' +
-              'padding:8px;border:1px solid #ef4444;z-index:999999;white-space:pre-wrap;word-break:break-all;';
-            box.textContent = '';
+              'padding:8px 28px 8px 8px;border:1px solid #ef4444;z-index:999999;' +
+              'white-space:pre-wrap;word-break:break-all;';
+            var close = document.createElement('button');
+            close.textContent = '\u00d7';
+            close.setAttribute('aria-label', 'Close error panel');
+            close.style.cssText = 'position:absolute;top:2px;right:6px;background:none;border:0;' +
+              'color:#991b1b;font-size:18px;line-height:1;cursor:pointer;';
+            close.onclick = function () { box.remove(); };
+            box.appendChild(close);
+            var body = document.createElement('div');
+            box.appendChild(body);
             document.body.appendChild(box);
           }
-          return box;
+          return box.lastChild;
         }
-        function logErr(m) {
+
+        function logErr(label, detail) {
           try {
-            var box = ensureBox();
-            box.textContent += (box.textContent ? '\n---\n' : '') +
-              new Date().toISOString() + ' ' + String(m);
-            box.style.display = 'block';
+            if (count >= MAX) return;
+            count++;
+            var body = ensureBox();
+            body.textContent += (body.textContent ? '\n---\n' : '') +
+              new Date().toISOString() + ' [' + label + '] ' + String(detail);
           } catch (e) { /* give up */ }
         }
+
         window.addEventListener('error', function (e) {
-          logErr('[window.onerror] ' + (e.message || e.type) +
+          // Ignore resource-load errors: no message and a DOM target.
+          if (e.target && e.target !== window && e.target.nodeType === 1) return;
+          if (!e.message) return;
+          logErr('js', e.message +
             (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : ''));
           return false;
         }, true);
+
         window.addEventListener('unhandledrejection', function (e) {
-          logErr('[unhandledrejection] ' + (e.reason && (e.reason.stack || e.reason.message) || String(e.reason)));
+          var r = e.reason;
+          logErr('promise', (r && (r.stack || r.message)) || String(r));
           return false;
         });
-        // Also monkey-patch console.error/warn so even caught errors surface.
-        var origErr = console.error, origWarn = console.warn;
-        console.error = function () { origErr.apply(console, arguments); logErr('[console.error] ' + Array.from(arguments).map(function (a) { try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); } }).join(' ')); };
-        console.warn = function () { origWarn.apply(console, arguments); logErr('[console.warn] ' + Array.from(arguments).map(function (a) { try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); } }).join(' ')); };
       })();
     </script>
     <script type="module">

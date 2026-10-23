@@ -115,10 +115,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     };
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      // Wrap with a timeout so the UI never hangs forever on a dead network.
+      const TIMEOUT_MS = 15000;
+      const signInPromise = supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,
       });
+      const timeoutPromise = new Promise<{ error: Error }>((_, reject) =>
+        setTimeout(() => reject(new Error(`Request timed out after ${TIMEOUT_MS / 1000}s`)), TIMEOUT_MS)
+      );
+      const signInResult = await Promise.race([signInPromise, timeoutPromise]) as Awaited<typeof signInPromise>;
+      const { error } = signInResult;
       if (error) {
         diag.path = 'supabase-error';
         diag.name = error.name;

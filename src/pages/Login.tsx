@@ -21,12 +21,13 @@ export default function Login() {
     setError(null);
     clearDiag();
     setSubmitting(true);
-    const err = await signIn(email.trim().toLowerCase(), password);
-    if (err) {
-      setError(err);
+    try {
+      const err = await signIn(email.trim().toLowerCase(), password);
+      if (err) setError(err);
+      // on success, App redirects to /; reset UI state either way
+    } finally {
       setSubmitting(false);
     }
-    // on success, App redirects to /
   };
 
   const handleResetRequest = async (e: React.FormEvent) => {

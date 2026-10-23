@@ -5,6 +5,47 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Horserace Catalog</title>
+    <!-- Global error catch-all that runs BEFORE the React bundle loads.
+         Writes to #__global_err__ so we catch parse errors, CORS failures,
+         and anything that crashes before main.tsx mounts. -->
+    <script>
+      (function () {
+        function ensureBox() {
+          var box = document.getElementById('__global_err__');
+          if (!box) {
+            box = document.createElement('pre');
+            box.id = '__global_err__';
+            box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:50vh;overflow:auto;' +
+              'background:#fee2e2;color:#991b1b;font:10px/1.4 ui-monospace,Menlo,Consolas,monospace;' +
+              'padding:8px;border:1px solid #ef4444;z-index:999999;white-space:pre-wrap;word-break:break-all;';
+            box.textContent = '';
+            document.body.appendChild(box);
+          }
+          return box;
+        }
+        function logErr(m) {
+          try {
+            var box = ensureBox();
+            box.textContent += (box.textContent ? '\n---\n' : '') +
+              new Date().toISOString() + ' ' + String(m);
+            box.style.display = 'block';
+          } catch (e) { /* give up */ }
+        }
+        window.addEventListener('error', function (e) {
+          logErr('[window.onerror] ' + (e.message || e.type) +
+            (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : ''));
+          return false;
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          logErr('[unhandledrejection] ' + (e.reason && (e.reason.stack || e.reason.message) || String(e.reason)));
+          return false;
+        });
+        // Also monkey-patch console.error/warn so even caught errors surface.
+        var origErr = console.error, origWarn = console.warn;
+        console.error = function () { origErr.apply(console, arguments); logErr('[console.error] ' + Array.from(arguments).map(function (a) { try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); } }).join(' ')); };
+        console.warn = function () { origWarn.apply(console, arguments); logErr('[console.warn] ' + Array.from(arguments).map(function (a) { try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch (e) { return String(a); } }).join(' ')); };
+      })();
+    </script>
     <script type="module">
       if (import.meta.hot?.on) {
         import.meta.hot.on('vite:error', (error) => {

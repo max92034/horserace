@@ -7,16 +7,25 @@ interface Profile {
   is_admin: boolean;
 }
 
+/**
+ * Diagnostic record written on every sign-in attempt, IN MEMORY ONLY so it
+ * survives Private Browsing / ITP / quota blocks. The Login page reads this
+ * state directly — no localStorage round-trip needed.
+ */
+export type AuthDiag = Record<string, unknown>;
+
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
   isAdmin: boolean;
   loading: boolean;
   isPasswordRecovery: boolean;
+  lastDiag: AuthDiag | null;
   init: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   clearPasswordRecovery: () => void;
+  clearDiag: () => void;
 }
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -31,12 +40,24 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
 
 let initialized = false;
 
+/**
+ * Best-effort write-through to localStorage so users with normal storage
+ * can still inspect the diag (e.g. desktop devtools). Always wrapped so
+ * a blocked storage never surfaces — the Zustand state is canonical.
+ */
+function bestEffortLocalStoreDump(diag: AuthDiag) {
+  try {
+    localStorage.setItem('__auth_diag__', JSON.stringify(diag));
+  } catch { /* iOS Private Browsing / ITP — ignore */ }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   profile: null,
   isAdmin: false,
   loading: true,
   isPasswordRecovery: false,
+  lastDiag: null,
 
   init: async () => {
     if (initialized) return;
@@ -67,25 +88,33 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signIn: async (email, password) => {
-    const diag: Record<string, unknown> = {};
-    diag.ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
-    diag.now = new Date().toISOString();
-    try {
-      // Quick pre-flight storage check so the diagnostic panel has data
-      try {
-        const probe = '__diag_probe__';
-        localStorage.setItem(probe, '1');
-        localStorage.removeItem(probe);
-        diag.localStorage = 'ok';
-      } catch (e) {
-        diag.localStorage = `blocked: ${(e as Error).name}`;
-      }
-      try {
-        diag.cookieEnabled = navigator.cookieEnabled;
-      } catch {
-        diag.cookieEnabled = 'n/a';
-      }
+    const diag: AuthDiag = {
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+      now: new Date().toISOString(),
+    };
 
+    // Pre-flight environment probes — all wrapped so nothing throws.
+    try {
+      const probe = '__diag_probe__';
+      localStorage.setItem(probe, '1');
+      localStorage.removeItem(probe);
+      diag.localStorage = 'ok';
+    } catch (e) {
+      diag.localStorage = `blocked: ${(e as Error).name}`;
+    }
+    try { diag.cookieEnabled = navigator.cookieEnabled; } catch { diag.cookieEnabled = 'n/a'; }
+    try { diag.onLine = navigator.onLine; } catch { /* ignore */ }
+
+    // iOS / Safari detection
+    const ua = String(diag.ua).toLowerCase();
+    diag.isIOS = /iphone|ipad|ipod/.test(ua) || (/macintosh/.test(ua) && 'ontouchend' in document);
+
+    const commitDiag = () => {
+      set({ lastDiag: diag });
+      bestEffortLocalStoreDump(diag);
+    };
+
+    try {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,
@@ -94,17 +123,19 @@ export const useAuthStore = create<AuthState>((set) => ({
         diag.path = 'supabase-error';
         diag.name = error.name;
         diag.message = error.message;
-        diag.code = (error as { code?: unknown }).code ?? null;
+        (diag as { code?: unknown }).code = (error as { code?: unknown }).code ?? null;
         // eslint-disable-next-line no-console
         console.warn('[auth] signInWithPassword returned error:', {
           name: error.name,
           message: error.message,
           stack: error.stack?.substring(0, 200),
         });
-        localStorage.setItem('__auth_diag__', JSON.stringify(diag));
+        commitDiag();
         return error.message;
       }
-      localStorage.removeItem('__auth_diag__');
+      // success — clear any stale diagnostic
+      set({ lastDiag: null });
+      try { localStorage.removeItem('__auth_diag__'); } catch { /* ignore */ }
       return null;
     } catch (err: unknown) {
       const e = err as Error;
@@ -116,16 +147,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       // eslint-disable-next-line no-console
       console.error('[auth] signIn threw:', diag);
 
-      // Human-friendly mapping for common iOS Safari failure modes
-      const ua = (diag.ua as string).toLowerCase();
-      const isIOS = /iphone|ipad|ipod/.test(ua) || (/macintosh/.test(ua) && 'ontouchend' in document);
-      diag.isIOS = isIOS;
+      commitDiag();
+
       const msg = diag.message as string;
 
-      localStorage.setItem('__auth_diag__', JSON.stringify(diag));
-
       if (msg.includes('network') || msg.includes('fetch') || diag.name === 'TypeError') {
-        if (isIOS) {
+        if (diag.isIOS) {
           return 'Unable to connect to the server. On iPhone, please check that you are not in Private Browsing mode, or try a different browser.';
         }
         return 'Network error. Please check your connection and try again.';
@@ -144,5 +171,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearPasswordRecovery: () => {
     set({ isPasswordRecovery: false });
+  },
+
+  clearDiag: () => {
+    set({ lastDiag: null });
   },
 }));

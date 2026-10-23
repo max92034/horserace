@@ -89,8 +89,16 @@ function buildFetchErrorMsg(diag: AuthDiag): string {
   const netBlocked = (diag.networkLevel as string | undefined) === 'blocked';
 
   if (netBlocked) {
+    const ua = String(diag.ua ?? '').toLowerCase();
+    if (/iphone|ipad|ipod/.test(ua)) {
+      return (
+        `Cannot reach ${host}. On iPhone this is often caused by a Content Blocker ` +
+        `(AdGuard, 1Blocker, uBlock, etc.) blocking the connection. Try disabling it for ` +
+        `this site in Settings → Safari → Content Blockers, or switch Wi-Fi/mobile data.`
+      );
+    }
     return (
-      `Cannot reach ${host} at all — your phone's network (Wi-Fi or data) appears to be ` +
+      `Cannot reach ${host} at all — your network (Wi-Fi or data) appears to be ` +
       `blocking the connection. Try switching Wi-Fi/mobile data, disabling VPN/ad-blockers, ` +
       `or try a different browser.`
     );
@@ -239,7 +247,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         // AuthRetryableFetchError == browser could not reach Supabase at all
         // (CORS blocked, network blocked, or server unreachable). Try to
         // distinguish them with a lightweight pre-flight probe.
-        if (error.name === 'AuthRetryableFetchError' || (error.message ?? '').includes('Failed to fetch')) {
+        const isFetchFailure =
+          error.name === 'AuthRetryableFetchError' ||
+          /(failed to fetch|load failed|networkerror)/i.test(error.message ?? '');
+        if (isFetchFailure) {
           const probeResult = await probeSupabaseReachability(diag);
           Object.assign(diag, probeResult);
           commitDiag();
@@ -272,12 +283,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       commitDiag();
 
       const msg = diag.message as string;
+      const isNetworkLike =
+        /(network|fetch|load failed|networkerror|typeerror)/i.test(msg) ||
+        diag.name === 'TypeError' ||
+        diag.name === 'AuthRetryableFetchError';
 
-      if (msg.includes('network') || msg.includes('fetch') || diag.name === 'TypeError') {
-        if (diag.isIOS) {
-          return 'Unable to connect to the server. On iPhone, please check that you are not in Private Browsing mode, or try a different browser.';
-        }
-        return 'Network error. Please check your connection and try again.';
+      if (isNetworkLike) {
+        // Run the probe to tell CORS vs network vs content-blocker apart.
+        Object.assign(diag, await probeSupabaseReachability(diag));
+        commitDiag();
+        return buildFetchErrorMsg(diag);
       }
       if (msg.includes('Storage') || msg.includes('QuotaExceeded')) {
         return 'Unable to save your login session. Please disable Private Browsing or update your browser.';

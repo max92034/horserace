@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabase';
-import { LogIn, Mail, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Mail, Eye, EyeOff, Bug } from 'lucide-react';
 
 export default function Login() {
   const signIn = useAuthStore(state => state.signIn);
@@ -12,14 +12,26 @@ export default function Login() {
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [diag, setDiag] = useState<Record<string, unknown> | null>(null);
+
+  const loadDiag = () => {
+    try {
+      const raw = localStorage.getItem('__auth_diag__');
+      if (raw) setDiag(JSON.parse(raw));
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => { loadDiag(); }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setDiag(null);
     setSubmitting(true);
     const err = await signIn(email.trim().toLowerCase(), password);
     if (err) {
       setError(err);
+      loadDiag();
       setSubmitting(false);
     }
     // on success, App redirects to /
@@ -203,6 +215,47 @@ export default function Login() {
               {submitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
+        )}
+
+        {diag && (
+          <details
+            style={{
+              marginTop: '1rem',
+              padding: '0.75rem',
+              borderRadius: '8px',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+            }}
+          >
+            <summary
+              style={{
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                color: 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              <Bug size={14} />
+              Diagnostic details (tap to expand — screenshot this)
+            </summary>
+            <pre
+              style={{
+                marginTop: '0.5rem',
+                fontSize: '0.65rem',
+                lineHeight: 1.4,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+                color: 'var(--text-muted)',
+                maxHeight: '320px',
+                overflowY: 'auto',
+              }}
+            >
+{JSON.stringify(diag, null, 2)}
+            </pre>
+          </details>
         )}
       </div>
     </div>

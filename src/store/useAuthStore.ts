@@ -67,39 +67,64 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   signIn: async (email, password) => {
+    const diag: Record<string, unknown> = {};
+    diag.ua = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
+    diag.now = new Date().toISOString();
     try {
+      // Quick pre-flight storage check so the diagnostic panel has data
+      try {
+        const probe = '__diag_probe__';
+        localStorage.setItem(probe, '1');
+        localStorage.removeItem(probe);
+        diag.localStorage = 'ok';
+      } catch (e) {
+        diag.localStorage = `blocked: ${(e as Error).name}`;
+      }
+      try {
+        diag.cookieEnabled = navigator.cookieEnabled;
+      } catch {
+        diag.cookieEnabled = 'n/a';
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: email.toLowerCase(),
         password,
       });
       if (error) {
+        diag.path = 'supabase-error';
+        diag.name = error.name;
+        diag.message = error.message;
+        diag.code = (error as { code?: unknown }).code ?? null;
         // eslint-disable-next-line no-console
         console.warn('[auth] signInWithPassword returned error:', {
           name: error.name,
           message: error.message,
           stack: error.stack?.substring(0, 200),
         });
+        localStorage.setItem('__auth_diag__', JSON.stringify(diag));
         return error.message;
       }
+      localStorage.removeItem('__auth_diag__');
       return null;
     } catch (err: unknown) {
-      // Catch raw exceptions (network, CORS, storage, etc.) that Supabase-js
-      // didn't wrap into its normal error shape.
       const e = err as Error;
+      diag.path = 'exception';
+      diag.name = e?.name ?? 'Unknown';
+      diag.message = e?.message ?? String(err);
+      diag.stack = e?.stack?.substring(0, 300) ?? '';
+
       // eslint-disable-next-line no-console
-      console.error('[auth] signIn threw:', {
-        name: e?.name ?? 'Unknown',
-        message: e?.message ?? String(err),
-        stack: e?.stack?.substring(0, 300),
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-      });
+      console.error('[auth] signIn threw:', diag);
 
       // Human-friendly mapping for common iOS Safari failure modes
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
-      const isIOS = /iphone|ipad|ipod/.test(ua) || /macintosh/.test(ua) && 'ontouchend' in document;
-      const msg = e?.message ?? '';
+      const ua = (diag.ua as string).toLowerCase();
+      const isIOS = /iphone|ipad|ipod/.test(ua) || (/macintosh/.test(ua) && 'ontouchend' in document);
+      diag.isIOS = isIOS;
+      const msg = diag.message as string;
 
-      if (msg.includes('network') || msg.includes('fetch') || e?.name === 'TypeError') {
+      localStorage.setItem('__auth_diag__', JSON.stringify(diag));
+
+      if (msg.includes('network') || msg.includes('fetch') || diag.name === 'TypeError') {
         if (isIOS) {
           return 'Unable to connect to the server. On iPhone, please check that you are not in Private Browsing mode, or try a different browser.';
         }
@@ -108,7 +133,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (msg.includes('Storage') || msg.includes('QuotaExceeded')) {
         return 'Unable to save your login session. Please disable Private Browsing or update your browser.';
       }
-      return msg || 'Unknown error during sign-in.';
+      return (diag.message as string) || 'Unknown error during sign-in.';
     }
   },
 

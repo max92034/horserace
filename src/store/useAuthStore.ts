@@ -84,12 +84,14 @@ async function probeSupabaseReachability(_diag: AuthDiag): Promise<AuthDiag> {
 function buildFetchErrorMsg(diag: AuthDiag): string {
   const origin = String(diag.origin ?? 'this page');
   const host = String(diag.supabaseHost ?? 'Supabase');
+  const ua = String(diag.ua ?? '').toLowerCase();
 
   const corsInfo = diag.corsFetch as { ok?: boolean; allowOrigin?: string; origin?: string } | undefined;
   const netBlocked = (diag.networkLevel as string | undefined) === 'blocked';
+  const noCorsReached = (diag.noCorsFetch as { ok?: boolean } | undefined)?.ok === true;
+  const isAggressiveBrowser = /heytapbrowser|huaweibrowser|honorbrowser|samsunginternet/i.test(ua);
 
   if (netBlocked) {
-    const ua = String(diag.ua ?? '').toLowerCase();
     if (/iphone|ipad|ipod/.test(ua)) {
       return (
         `Cannot reach ${host}. On iPhone this is often caused by a Content Blocker ` +
@@ -97,10 +99,32 @@ function buildFetchErrorMsg(diag: AuthDiag): string {
         `this site in Settings → Safari → Content Blockers, or switch Wi-Fi/mobile data.`
       );
     }
+    if (isAggressiveBrowser) {
+      return (
+        `Cannot reach ${host}. This browser's built-in privacy protection may be blocking ` +
+        `third-party connections. Please try opening this page in Chrome instead.`
+      );
+    }
     return (
       `Cannot reach ${host} at all — your network (Wi-Fi or data) appears to be ` +
-      `blocking the connection. Try switching Wi-Fi/mobile data, disabling VPN/ad-blockers, ` +
-      `or try a different browser.`
+      `blocking the connection. Try switching Wi-Fi/mobile data or disabling VPN/ad-blockers.`
+    );
+  }
+
+  // noCors reached server (network OK) but real CORS fetch failed → browser is
+  // dropping the OPTIONS preflight silently. Server-side CORS is fine.
+  if (noCorsReached && diag.corsOK === false) {
+    if (isAggressiveBrowser) {
+      return (
+        `Unable to sign-in — ${host} is reachable but this browser is blocking the ` +
+        `third-party request (preflight dropped). Please open this page in Chrome instead.`
+      );
+    }
+    const allowOrigin = corsInfo?.allowOrigin ?? '(not returned)';
+    return (
+      `Sign-in blocked by CORS. The Supabase project has not added "${origin}" to its ` +
+      `allowed auth origins. Ask the admin to add it in the Supabase dashboard → ` +
+      `Authentication → URL Configuration. (Server echo: ${allowOrigin})`
     );
   }
 
@@ -113,8 +137,7 @@ function buildFetchErrorMsg(diag: AuthDiag): string {
     );
   }
 
-  const ua = String(diag.ua ?? '').toLowerCase();
-  if (/heytapbrowser|huaweibrowser|honorbrowser|samsunginternet/i.test(ua)) {
+  if (isAggressiveBrowser) {
     return (
       `Unable to connect to sign-in server. This browser appears to be blocking third-party ` +
       `requests. Please try opening this page in Chrome or Safari instead.`

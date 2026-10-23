@@ -14,6 +14,108 @@ interface Profile {
  */
 export type AuthDiag = Record<string, unknown>;
 
+function supabaseUrlFromClient(): string {
+  return (import.meta.env.VITE_SUPABASE_URL as string) ?? '';
+}
+
+/**
+ * Lightweight probe to distinguish between:
+ *   - CORS block (server reachable but doesn't allow this Origin)
+ *   - Network block (server not reachable at all)
+ *   - Server OK (200 response with CORS headers)
+ */
+async function probeSupabaseReachability(_diag: AuthDiag): Promise<AuthDiag> {
+  const result: AuthDiag = { probeAt: new Date().toISOString() };
+  const base = supabaseUrlFromClient().replace(/\/$/, '');
+  if (!base) {
+    result.probe = 'skipped: no supabase url';
+    return result;
+  }
+
+  // 1) Can the browser reach the host at all? (no-cors → opaque is fine)
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(`${base}/auth/v1/health`, {
+      method: 'GET',
+      mode: 'no-cors',
+      cache: 'no-store',
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    result.noCorsFetch = { ok: true, status: r.status || 'opaque' };
+  } catch (e: unknown) {
+    const err = e as Error;
+    result.noCorsFetch = { ok: false, name: err.name, message: err.message };
+    result.networkLevel = 'blocked';
+    return result;
+  }
+
+  // 2) Real CORS fetch to auth endpoint — check Access-Control-Allow-Origin
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      mode: 'cors',
+      cache: 'no-store',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'probe@invalid.local', password: 'probe' }),
+    });
+    clearTimeout(t);
+    const allowOrigin = r.headers.get('access-control-allow-origin') ?? null;
+    result.corsFetch = {
+      status: r.status,
+      allowOrigin,
+      origin: typeof window !== 'undefined' ? window.location.origin : 'unknown',
+    };
+    result.corsOK = r.ok || r.status === 400; // bad creds expected → CORS is fine
+  } catch (e: unknown) {
+    const err = e as Error;
+    result.corsFetch = { ok: false, name: err.name, message: err.message };
+    result.corsOK = false;
+  }
+
+  return result;
+}
+
+/** Build a user-friendly message from the diagnostic after a fetch failure. */
+function buildFetchErrorMsg(diag: AuthDiag): string {
+  const origin = String(diag.origin ?? 'this page');
+  const host = String(diag.supabaseHost ?? 'Supabase');
+
+  const corsInfo = diag.corsFetch as { ok?: boolean; allowOrigin?: string; origin?: string } | undefined;
+  const netBlocked = (diag.networkLevel as string | undefined) === 'blocked';
+
+  if (netBlocked) {
+    return (
+      `Cannot reach ${host} at all — your phone's network (Wi-Fi or data) appears to be ` +
+      `blocking the connection. Try switching Wi-Fi/mobile data, disabling VPN/ad-blockers, ` +
+      `or try a different browser.`
+    );
+  }
+
+  if (diag.corsOK === false) {
+    const allowOrigin = corsInfo?.allowOrigin ?? '(not returned)';
+    return (
+      `Sign-in blocked by CORS. The Supabase project has not added "${origin}" to its ` +
+      `allowed auth origins. Ask the admin to add it in the Supabase dashboard → ` +
+      `Authentication → URL Configuration. (Server echo: ${allowOrigin})`
+    );
+  }
+
+  const ua = String(diag.ua ?? '').toLowerCase();
+  if (/heytapbrowser|huaweibrowser|honorbrowser|samsunginternet/i.test(ua)) {
+    return (
+      `Unable to connect to sign-in server. This browser appears to be blocking third-party ` +
+      `requests. Please try opening this page in Chrome or Safari instead.`
+    );
+  }
+
+  return `Network error. Cannot reach the sign-in server right now. Please try again later.`;
+}
+
 interface AuthState {
   session: Session | null;
   profile: Profile | null;
@@ -104,6 +206,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     try { diag.cookieEnabled = navigator.cookieEnabled; } catch { diag.cookieEnabled = 'n/a'; }
     try { diag.onLine = navigator.onLine; } catch { /* ignore */ }
+    try { diag.origin = window.location.origin; } catch { /* ignore */ }
+    try { diag.supabaseHost = new URL(supabaseUrlFromClient()).hostname; } catch { /* ignore */ }
 
     // iOS / Safari detection
     const ua = String(diag.ua).toLowerCase();
@@ -131,6 +235,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         diag.name = error.name;
         diag.message = error.message;
         (diag as { code?: unknown }).code = (error as { code?: unknown }).code ?? null;
+
+        // AuthRetryableFetchError == browser could not reach Supabase at all
+        // (CORS blocked, network blocked, or server unreachable). Try to
+        // distinguish them with a lightweight pre-flight probe.
+        if (error.name === 'AuthRetryableFetchError' || (error.message ?? '').includes('Failed to fetch')) {
+          const probeResult = await probeSupabaseReachability(diag);
+          Object.assign(diag, probeResult);
+          commitDiag();
+          return buildFetchErrorMsg(diag);
+        }
+
         // eslint-disable-next-line no-console
         console.warn('[auth] signInWithPassword returned error:', {
           name: error.name,
